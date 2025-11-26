@@ -1,10 +1,21 @@
-import { GoogleGenAI, Modality } from "@google/genai";
+import OpenAI from 'openai';
+
+// Extend Window interface to support aistudio if needed, or just use any
+declare global {
+  interface Window {
+    aistudio?: any;
+  }
+}
 
 const getAiClient = () => {
   if (!process.env.API_KEY) {
     throw new Error("API Key not found. Please select an API Key.");
   }
-  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+  return new OpenAI({
+    apiKey: process.env.API_KEY,
+    baseURL: 'https://new.wuxuai.com/v1',
+    dangerouslyAllowBrowser: true
+  });
 };
 
 /**
@@ -17,7 +28,7 @@ const generateSingleFrame = async (
   index: number,
   total: number
 ): Promise<string> => {
-  const ai = getAiClient();
+  const openai = getAiClient();
 
   // Prompt optimized for single-frame consistency
   const enhancedPrompt = `Generate frame ${index + 1} of ${total} for an animation sequence.
@@ -36,63 +47,90 @@ const generateSingleFrame = async (
   Output: A single high-quality image.`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image', 
-      contents: {
-        parts: [
-          {
-            inlineData: {
-              data: imageBase64,
-              mimeType: mimeType,
-            },
-          },
-          {
-            text: enhancedPrompt,
-          },
-        ],
-      },
-      config: {
-          responseModalities: [Modality.IMAGE],
-      },
+    const response = await openai.chat.completions.create({
+      model: 'gemini-2.5-flash-image', // Using the model specified by user context (implied via proxy)
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: enhancedPrompt },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:${mimeType};base64,${imageBase64}`
+              }
+            }
+          ]
+        }
+      ],
     });
 
-    const candidate = response.candidates?.[0];
-
-    if (!candidate) {
-        throw new Error("Gemini API returned no candidates.");
-    }
-
-    if (candidate.finishReason && candidate.finishReason !== 'STOP') {
-        throw new Error(`Model stopped generation: ${candidate.finishReason}`);
-    }
-
-    const part = candidate.content?.parts?.[0];
+    const content = response.choices[0]?.message?.content;
     
-    if (part && part.text) {
-        throw new Error(`Model Refusal: ${part.text.slice(0, 100)}...`);
+    if (!content) {
+        throw new Error("OpenAI API returned no content.");
     }
 
-    if (!part || !part.inlineData || !part.inlineData.data) {
-        throw new Error("No image data generated.");
+    // Strategy 1: Look for Markdown Image
+    const markdownMatch = content.match(/!\[.*?\]\((.*?)\)/);
+    if (markdownMatch && markdownMatch[1]) {
+        return await fetchAndCreateBlobUrl(markdownMatch[1]);
     }
 
-    const base64Image = part.inlineData.data;
-    const resultMime = part.inlineData.mimeType || 'image/png';
+    // Strategy 2: Look for raw URL
+    const urlMatch = content.match(/(https?:\/\/[^\s]+)/);
+    if (urlMatch && urlMatch[0]) {
+        return await fetchAndCreateBlobUrl(urlMatch[0]);
+    }
     
-    // Convert Base64 to Blob URL
-    const byteCharacters = atob(base64Image);
-    const byteNumbers = new Array(byteCharacters.length);
-    for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
+    // Strategy 3: Check if content is Base64 (unlikely for Chat API but possible for some proxies)
+    // Simple check: does it look like base64?
+    if (content.length > 100 && !content.includes(' ')) {
+        try {
+             const blob = b64toBlob(content, 'image/png'); // Assume PNG
+             return URL.createObjectURL(blob);
+        } catch (e) {
+            // Not base64
+        }
     }
-    const byteArray = new Uint8Array(byteNumbers);
-    const blob = new Blob([byteArray], { type: resultMime });
-    return URL.createObjectURL(blob);
+
+    throw new Error(`Could not find image in response: ${content.slice(0, 100)}...`);
 
   } catch (error: any) {
     console.error(`Error generating frame ${index + 1}:`, error);
     throw error;
   }
+};
+
+// Helper to fetch URL and return Blob URL (avoids CORS issues in Canvas)
+const fetchAndCreateBlobUrl = async (url: string): Promise<string> => {
+    try {
+        const res = await fetch(url);
+        const blob = await res.blob();
+        return URL.createObjectURL(blob);
+    } catch (e) {
+        console.warn("Failed to fetch image URL, returning original URL:", e);
+        return url; // Fallback
+    }
+};
+
+// Helper for Base64 (if needed)
+const b64toBlob = (b64Data: string, contentType = '', sliceSize = 512) => {
+  const byteCharacters = atob(b64Data);
+  const byteArrays = [];
+
+  for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+    const slice = byteCharacters.slice(offset, offset + sliceSize);
+    const byteNumbers = new Array(slice.length);
+    for (let i = 0; i < slice.length; i++) {
+      byteNumbers[i] = slice.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    byteArrays.push(byteArray);
+  }
+
+  const blob = new Blob(byteArrays, { type: contentType });
+  return blob;
 };
 
 /**
@@ -137,6 +175,7 @@ export const checkApiKey = async (): Promise<boolean> => {
   if (process.env.API_KEY && process.env.API_KEY.length > 0) {
     return true;
   }
+  // Legacy check for AIStudio environment
   if (typeof window !== 'undefined' && window.aistudio && window.aistudio.hasSelectedApiKey) {
     try {
         return await window.aistudio.hasSelectedApiKey();
@@ -153,5 +192,6 @@ export const promptApiKeySelection = async (): Promise<void> => {
     await window.aistudio.openSelectKey();
   } else {
     console.warn("AIStudio API selection not available in this environment.");
+    alert("请先在环境中配置API密钥。");
   }
 };

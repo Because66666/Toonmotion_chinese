@@ -15,6 +15,9 @@ View your app in AI Studio: https://ai.studio/apps/drive/1HrzV1DLlYGgEygh0gbKxfD
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+2. Set the `API_KEY` in [.env.local](.env.local) to your Gemini API key
 3. Run the app:
    `npm run dev`
+
+## 修改说明
+- 文件`services/gemini.ts`中，将`Gemini`替换为`OpenAI`，从而可以自定义baseUrl和密钥。

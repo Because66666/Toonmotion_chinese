@@ -274,10 +274,10 @@ function App() {
               <Wand2 className="w-6 h-6 text-white" />
             </div>
             <div className="flex flex-col">
-              <h1 className="text-lg font-bold tracking-tight text-gray-900 leading-tight">ToonMotion</h1>
+              <h1 className="text-lg font-bold tracking-tight text-gray-900 leading-tight">角色动作帧生成</h1>
               <div className="flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
-                <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">Powered by Gemini</span>
+                <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">由Gemini驱动</span>
               </div>
             </div>
           </div>
