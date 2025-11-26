@@ -13,7 +13,7 @@ const getAiClient = () => {
   }
   return new OpenAI({
     apiKey: process.env.API_KEY,
-    baseURL: 'https://new.wuxuai.com/v1',
+    baseURL: 'https://ark.cn-beijing.volces.com/api/v3',
     dangerouslyAllowBrowser: true
   });
 };
@@ -31,24 +31,24 @@ const generateSingleFrame = async (
   const openai = getAiClient();
 
   // Prompt optimized for single-frame consistency
-  const enhancedPrompt = `Generate frame ${index + 1} of ${total} for an animation sequence.
-  
-  Subject: Fictional, generic chibi game character.
-  Visual Style: 2D digital game art, flat color, high contrast.
-  Action: ${prompt}
-  
-  CRITICAL CONSTRAINTS:
-  1. **View**: Full body, Frontal, Orthographic view.
-  2. **Background**: Pure White (#FFFFFF).
-  3. **Framing**: Character must be fully visible within the frame, no cropping.
-  4. **Consistency**: Maintain exact character proportions and design details from the reference image.
-  5. **Content**: NO text, NO grid lines, NO numbers, NO extra objects. One character only.
-  
-  Output: A single high-quality image.`;
+  const enhancedPrompt = `生成动画序列的第 ${index + 1} 帧，共 ${total} 帧。
+
+  主题：虚构的通用 Q 版游戏角色。
+  视觉风格：2D 数字游戏美术，扁平色彩，高对比度。
+  动作：${prompt}
+
+  关键约束：
+  1. **视角**：全身、正面、正交视图。
+  2. **背景**：纯白色 (#FFFFFF)。
+  3. **构图**：角色必须在画面中完整可见，不得裁剪。
+  4. **一致性**：保持与参考图像完全一致的角色比例和设计细节。
+  5. **内容**：禁止出现文字、网格线、数字或任何额外物品。仅允许一个角色。
+
+  输出：一张高质量的单幅图像。`;
 
   try {
     const response = await openai.chat.completions.create({
-      model: 'gemini-2.5-flash-image', // Using the model specified by user context (implied via proxy)
+      model: 'ep-20251127000002-dblf6', // Using the model specified by user context (implied via proxy)
       messages: [
         {
           role: "user",
@@ -188,10 +188,9 @@ export const checkApiKey = async (): Promise<boolean> => {
 };
 
 export const promptApiKeySelection = async (): Promise<void> => {
-  if (window.aistudio && window.aistudio.openSelectKey) {
-    await window.aistudio.openSelectKey();
-  } else {
-    console.warn("AIStudio API selection not available in this environment.");
-    alert("请先在环境中配置API密钥。");
+  if (process.env.API_KEY) {
+    return;
   }
+  console.warn("API Key not found in environment.");
+  alert("请在 .env 文件中配置 API_KEY (例如 API_KEY=sk-...)，然后重启服务。");
 };
